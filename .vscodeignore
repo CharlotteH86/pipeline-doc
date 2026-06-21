@@ -4,5 +4,10 @@ src/**
 .gitattributes
 tsconfig.json
 out/**/*.map
+out/adfParser.js
+out/aiService.js
+out/diagramGenerator.js
+out/parser.js
+out/sidebarProvider.js
 node_modules/**
 *.vsix

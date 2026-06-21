@@ -2,7 +2,7 @@
   "name": "pipeline-doc",
   "displayName": "PipelineDoc",
   "description": "Auto-generate documentation from ETL pipelines (Talend, ADF, Microsoft Fabric) using AI",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "xHolst",
   "author": {
     "name": "Charlotte Holst",
@@ -131,15 +131,17 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "package": "npx @vscode/vsce package",
-    "publish": "npx @vscode/vsce publish"
+    "compile": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --platform=node --format=cjs --sourcemap",
+    "watch": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --platform=node --format=cjs --sourcemap --watch",
+    "typecheck": "tsc --noEmit",
+    "package": "npm run compile && npx @vscode/vsce package",
+    "publish": "npm run compile && npx @vscode/vsce publish"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.1",
     "typescript": "^5.3.0"
   },
   "dependencies": {
