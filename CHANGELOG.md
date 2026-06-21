@@ -2,6 +2,12 @@
 
 All notable changes to PipelineDoc will be documented here.
 
+## [0.1.1] — 2026-06-21
+
+### Fixed
+
+- Activity Bar panel now activates correctly on startup
+
 ## [0.1.0] — 2026-06-21
 
 ### Added

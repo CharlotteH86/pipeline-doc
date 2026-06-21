@@ -2,7 +2,7 @@
   "name": "pipeline-doc",
   "displayName": "PipelineDoc",
   "description": "Auto-generate documentation from ETL pipelines (Talend, ADF, Microsoft Fabric) using AI",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "xHolst",
   "author": {
     "name": "Charlotte Holst",
@@ -30,7 +30,10 @@
     "documentation",
     "ai"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:pipelineDocView",
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
