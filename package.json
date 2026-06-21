@@ -1,0 +1,106 @@
+{
+  "name": "pipeline-doc",
+  "displayName": "PipelineDoc",
+  "description": "Auto-generate documentation from ETL pipelines (Talend, ADF, Microsoft Fabric) using AI",
+  "version": "0.1.0",
+  "publisher": "xHolst",
+  "author": {
+    "name": "Charlotte Holst",
+    "url": "https://github.com/CharlotteH86"
+  },
+  "icon": "icon.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CharlotteH86/pipeline-doc"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "talend",
+    "adf",
+    "azure data factory",
+    "fabric",
+    "etl",
+    "pipeline",
+    "documentation",
+    "ai"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "pipeline-doc.generateFromItem",
+        "title": "PipelineDoc: Generate Documentation from .item file"
+      },
+      {
+        "command": "pipeline-doc.generateFromJson",
+        "title": "PipelineDoc: Generate Documentation from ADF / Fabric / Talend JSON"
+      },
+      {
+        "command": "pipeline-doc.setOpenAIKey",
+        "title": "PipelineDoc: Set OpenAI API Key"
+      },
+      {
+        "command": "pipeline-doc.setAnthropicKey",
+        "title": "PipelineDoc: Set Anthropic API Key"
+      }
+    ],
+    "configuration": {
+      "title": "PipelineDoc",
+      "properties": {
+        "pipelineDoc.aiProvider": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "anthropic",
+            "premium"
+          ],
+          "default": "premium",
+          "description": "Which AI provider to use for documentation generation"
+        },
+        "pipelineDoc.outputLanguage": {
+          "type": "string",
+          "enum": [
+            "svenska",
+            "english"
+          ],
+          "default": "english",
+          "description": "Language for generated documentation"
+        }
+      }
+    },
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "pipeline-doc.generateFromItem",
+          "when": "resourceExtname == .item",
+          "group": "navigation"
+        },
+        {
+          "command": "pipeline-doc.generateFromJson",
+          "when": "resourceExtname == .json",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.3.0"
+  }
+}

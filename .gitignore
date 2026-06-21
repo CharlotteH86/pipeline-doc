@@ -1,0 +1,11 @@
+# Build output
+out/
+
+# Dependencies
+node_modules/
+
+# Packaged extension
+*.vsix
+
+# TypeScript incremental compilation
+*.tsbuildinfo
