@@ -95,7 +95,9 @@ async function showPrivacyNoticeOnce(
 
   if (choice === "Open Privacy info") {
     await vscode.env.openExternal(
-      vscode.Uri.parse("https://github.com/CharlotteH86/pipeline-doc#privacy--security"),
+      vscode.Uri.parse(
+        "https://github.com/CharlotteH86/pipeline-doc#privacy--security",
+      ),
     );
     // Ask again after they've read the info
     const confirm = await vscode.window.showInformationMessage(

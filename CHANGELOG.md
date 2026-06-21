@@ -5,6 +5,7 @@ All notable changes to PipelineDoc will be documented here.
 ## [0.1.0] — 2026-06-21
 
 ### Added
+
 - Generate AI-powered documentation from Talend `.item` files
 - Generate AI-powered documentation from Azure Data Factory (ADF) pipeline JSON
 - Generate AI-powered documentation from Microsoft Fabric Data Pipeline JSON
