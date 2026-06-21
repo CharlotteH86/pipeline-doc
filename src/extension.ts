@@ -65,9 +65,52 @@ export function activate(context: vscode.ExtensionContext): void {
       },
     ),
   );
+
+  // Show a one-time privacy notice so users know pipeline data is sent to AI APIs
+  showPrivacyNoticeOnce(context);
 }
 
 export function deactivate(): void {}
+
+// ---------------------------------------------------------------------------
+// Privacy notice (shown once per install)
+// ---------------------------------------------------------------------------
+
+const PRIVACY_NOTICE_KEY = "pipelineDoc.privacyNoticeAccepted";
+
+async function showPrivacyNoticeOnce(
+  context: vscode.ExtensionContext,
+): Promise<void> {
+  const accepted = context.globalState.get<boolean>(PRIVACY_NOTICE_KEY);
+  if (accepted) return;
+
+  const choice = await vscode.window.showInformationMessage(
+    "PipelineDoc sends pipeline content (including SQL queries and dataset names) " +
+      "to your chosen AI provider (OpenAI or Anthropic) to generate documentation. " +
+      "Do not use PipelineDoc with files containing secrets or passwords you cannot share with your AI provider.",
+    { modal: true },
+    "I understand — continue",
+    "Open Privacy info",
+  );
+
+  if (choice === "Open Privacy info") {
+    await vscode.env.openExternal(
+      vscode.Uri.parse("https://github.com/CharlotteH86/pipeline-doc#privacy--security"),
+    );
+    // Ask again after they've read the info
+    const confirm = await vscode.window.showInformationMessage(
+      "Ready to continue with PipelineDoc?",
+      { modal: true },
+      "Yes, I understand",
+    );
+    if (confirm !== "Yes, I understand") return;
+  } else if (choice !== "I understand — continue") {
+    // User dismissed — ask again next time
+    return;
+  }
+
+  await context.globalState.update(PRIVACY_NOTICE_KEY, true);
+}
 
 // ---------------------------------------------------------------------------
 // Kommando: generera från .item-fil
