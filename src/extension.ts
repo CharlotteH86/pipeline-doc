@@ -15,6 +15,7 @@ import * as vscode from "vscode";
 import { parseTalendItem, type PipelineDocument } from "./parser.js";
 import { parseAdfPipeline } from "./adfParser.js";
 import { generateMermaidDiagram } from "./diagramGenerator.js";
+import { PipelineDocSidebarProvider } from "./sidebarProvider.js";
 import {
   generateDocumentation,
   type AiConfig,
@@ -26,20 +27,42 @@ import {
 // ---------------------------------------------------------------------------
 
 export function activate(context: vscode.ExtensionContext): void {
+  const sidebar = new PipelineDocSidebarProvider(context);
+
   context.subscriptions.push(
+    vscode.window.registerTreeDataProvider("pipelineDocView", sidebar),
     vscode.commands.registerCommand(
       "pipeline-doc.generateFromItem",
-      (uri?: vscode.Uri) => handleGenerateFromItem(context, uri),
+      (uri?: vscode.Uri) => handleGenerateFromItem(context, sidebar, uri),
     ),
     vscode.commands.registerCommand(
       "pipeline-doc.generateFromJson",
-      (uri?: vscode.Uri) => handleGenerateFromJson(context, uri),
+      (uri?: vscode.Uri) => handleGenerateFromJson(context, sidebar, uri),
     ),
     vscode.commands.registerCommand("pipeline-doc.setOpenAIKey", () =>
       setApiKey(context, "openai"),
     ),
     vscode.commands.registerCommand("pipeline-doc.setAnthropicKey", () =>
       setApiKey(context, "anthropic"),
+    ),
+    vscode.commands.registerCommand("pipeline-doc.refreshSidebar", () =>
+      sidebar.refresh(),
+    ),
+    vscode.commands.registerCommand("pipeline-doc.openSettings", () =>
+      vscode.commands.executeCommand(
+        "workbench.action.openSettings",
+        "pipelineDoc",
+      ),
+    ),
+    vscode.commands.registerCommand(
+      "pipeline-doc.openRecentDoc",
+      async (filePath: string) => {
+        if (!filePath) return;
+        await vscode.commands.executeCommand(
+          "markdown.showPreview",
+          vscode.Uri.file(filePath),
+        );
+      },
     ),
   );
 }
@@ -52,6 +75,7 @@ export function deactivate(): void {}
 
 async function handleGenerateFromItem(
   context: vscode.ExtensionContext,
+  sidebar: PipelineDocSidebarProvider,
   uri?: vscode.Uri,
 ): Promise<void> {
   const filePath = await resolveFilePath(uri, {
@@ -74,7 +98,7 @@ async function handleGenerateFromItem(
         progress.report({ message: "Parsing pipeline job..." });
         const jobData = parseTalendItem(xmlContent);
 
-        await generateAndSave(context, jobData, filePath, progress);
+        await generateAndSave(context, sidebar, jobData, filePath, progress);
       } catch (err) {
         vscode.window.showErrorMessage(`PipelineDoc: ${String(err)}`);
       }
@@ -88,6 +112,7 @@ async function handleGenerateFromItem(
 
 async function handleGenerateFromJson(
   context: vscode.ExtensionContext,
+  sidebar: PipelineDocSidebarProvider,
   uri?: vscode.Uri,
 ): Promise<void> {
   const filePath = await resolveFilePath(uri, {
@@ -109,7 +134,7 @@ async function handleGenerateFromJson(
         const parsed: unknown = JSON.parse(raw);
         const jobData = parseJsonPipeline(parsed);
 
-        await generateAndSave(context, jobData, filePath, progress);
+        await generateAndSave(context, sidebar, jobData, filePath, progress);
       } catch (err) {
         vscode.window.showErrorMessage(`PipelineDoc: ${String(err)}`);
       }
@@ -123,6 +148,7 @@ async function handleGenerateFromJson(
 
 async function generateAndSave(
   context: vscode.ExtensionContext,
+  sidebar: PipelineDocSidebarProvider,
   jobData: PipelineDocument,
   sourceFilePath: string,
   progress: vscode.Progress<{ message?: string }>,
@@ -176,6 +202,13 @@ async function generateAndSave(
     "markdown.showPreview",
     vscode.Uri.file(outputPath),
   );
+
+  // Add to Recent Documents in the sidebar
+  await sidebar.addRecentDoc({
+    label: pipelineName,
+    filePath: outputPath,
+    timestamp: new Date().toISOString(),
+  });
 
   vscode.window.showInformationMessage(
     `PipelineDoc: Documentation saved → ${outputFileName}`,

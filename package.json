@@ -49,8 +49,38 @@
       {
         "command": "pipeline-doc.setAnthropicKey",
         "title": "PipelineDoc: Set Anthropic API Key"
+      },
+      {
+        "command": "pipeline-doc.openSettings",
+        "title": "PipelineDoc: Open Settings"
+      },
+      {
+        "command": "pipeline-doc.openRecentDoc",
+        "title": "PipelineDoc: Open Document"
+      },
+      {
+        "command": "pipeline-doc.refreshSidebar",
+        "title": "PipelineDoc: Refresh",
+        "icon": "$(refresh)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "pipelineDocSidebar",
+          "title": "PipelineDoc",
+          "icon": "sidebar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "pipelineDocSidebar": [
+        {
+          "id": "pipelineDocView",
+          "name": "PipelineDoc"
+        }
+      ]
+    },
     "configuration": {
       "title": "PipelineDoc",
       "properties": {
@@ -76,6 +106,13 @@
       }
     },
     "menus": {
+      "view/title": [
+        {
+          "command": "pipeline-doc.refreshSidebar",
+          "when": "view == pipelineDocView",
+          "group": "navigation"
+        }
+      ],
       "explorer/context": [
         {
           "command": "pipeline-doc.generateFromItem",
