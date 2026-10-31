@@ -13,6 +13,7 @@ PipelineDoc reads your pipeline files and generates complete, professional Markd
 - **Multi-format support** — Talend `.item` files, ADF pipeline JSON, Fabric pipeline JSON, ARM templates
 - **Secure API key storage** — keys stored encrypted via the system keychain (Windows Credential Manager / macOS Keychain), never in plain text
 - **Timestamped output** — every generation creates a new file, nothing is ever overwritten
+- **Batch Generation (Premium)** — right-click a folder to document every pipeline inside it in one go, plus a generated project index
 - **Language support** — English or Swedish output
 
 ---
@@ -48,6 +49,16 @@ Right-click any supported pipeline file in the Explorer panel and select:
 
 The rendered documentation opens automatically in Markdown Preview.
 
+### 3. Batch Generation (Premium)
+
+Right-click any folder in the Explorer panel and select **PipelineDoc: Generate Documentation for Folder (Batch)**. PipelineDoc will:
+
+- Recursively find every `.item`/`.json` pipeline file in the folder
+- Generate documentation for each one, skipping any that fail without stopping the rest
+- Write everything to a mirrored `pipeline-docs/` folder, plus a `README.md` index listing every pipeline (and any that failed, with the error)
+
+Batch Generation currently requires a local Premium flag (see Settings below) while real license validation is being built — it uses your own OpenAI/Anthropic API key, same as the free tier.
+
 ---
 
 ## Output Example
@@ -82,6 +93,10 @@ Files are saved next to the source file with a timestamp:
 | ---------------------------- | ---------------------------------- | --------- |
 | `pipelineDoc.aiProvider`     | `openai` / `anthropic` / `premium` | `premium` |
 | `pipelineDoc.outputLanguage` | `english` / `svenska`              | `english` |
+| `pipelineDoc.openaiModel`    | Any valid OpenAI model ID (e.g. `gpt-4o-mini`, `gpt-4o`) | `gpt-4o-mini` |
+| `pipelineDoc.anthropicModel` | Any valid Anthropic model ID (e.g. `claude-sonnet-4-6`, `claude-opus-4-1`) | `claude-sonnet-4-6` |
+| `pipelineDoc.batchConcurrency` | Max parallel pipelines during Batch Generation (lower if you hit API rate limits) | `5` |
+| `pipelineDoc.tier`           | `free` / `premium` — temporary local flag to unlock Premium features | `free` |
 
 API keys are managed securely via the Command Palette — not stored in settings.
 

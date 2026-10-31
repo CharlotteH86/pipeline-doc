@@ -2,6 +2,15 @@
 
 All notable changes to PipelineDoc will be documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Model selection:** choose which OpenAI (`pipelineDoc.openaiModel`) or Anthropic (`pipelineDoc.anthropicModel`) model to use for generation, instead of a hardcoded model. Accepts any valid model ID, with common models suggested in Settings.
+- **Batch Generation (Premium):** right-click a folder in Explorer to generate documentation for every `.item`/`.json` pipeline inside it (recursively), written to a mirrored `pipeline-docs/` folder alongside a deterministic `README.md` project index.
+- Adaptive concurrency with automatic rate-limit (429) backoff and retry during Batch Generation, configurable via `pipelineDoc.batchConcurrency` (default: 5)
+- `pipelineDoc.tier` setting as a temporary local flag to unlock Premium features ahead of real license validation
+
 ## [0.1.1] — 2026-06-21
 
 ### Fixed

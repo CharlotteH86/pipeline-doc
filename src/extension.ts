@@ -12,15 +12,16 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 
-import { parseTalendItem, type PipelineDocument } from "./parser.js";
-import { parseAdfPipeline } from "./adfParser.js";
-import { generateMermaidDiagram } from "./diagramGenerator.js";
+import { type PipelineDocument } from "./parser.js";
 import { PipelineDocSidebarProvider } from "./sidebarProvider.js";
+import { type AiConfig, type AiProvider } from "./aiService.js";
 import {
-  generateDocumentation,
-  type AiConfig,
-  type AiProvider,
-} from "./aiService.js";
+  discoverPipelineFiles,
+  hasApiKey,
+  parsePipelineFile,
+  renderPipelineMarkdown,
+} from "./pipelineRouter.js";
+import { runBatchGeneration } from "./batchGenerator.js";
 
 // ---------------------------------------------------------------------------
 // Aktivering
@@ -38,6 +39,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "pipeline-doc.generateFromJson",
       (uri?: vscode.Uri) => handleGenerateFromJson(context, sidebar, uri),
+    ),
+    vscode.commands.registerCommand(
+      "pipeline-doc.generateBatch",
+      (uri?: vscode.Uri) => handleGenerateBatch(context, sidebar, uri),
     ),
     vscode.commands.registerCommand("pipeline-doc.setOpenAIKey", () =>
       setApiKey(context, "openai"),
@@ -138,10 +143,7 @@ async function handleGenerateFromItem(
     async (progress) => {
       try {
         progress.report({ message: "Reading .item file..." });
-        const xmlContent = fs.readFileSync(filePath, "utf-8");
-
-        progress.report({ message: "Parsing pipeline job..." });
-        const jobData = parseTalendItem(xmlContent);
+        const jobData = parsePipelineFile(filePath);
 
         await generateAndSave(context, sidebar, jobData, filePath, progress);
       } catch (err) {
@@ -175,9 +177,7 @@ async function handleGenerateFromJson(
     async (progress) => {
       try {
         progress.report({ message: "Reading JSON file..." });
-        const raw = fs.readFileSync(filePath, "utf-8");
-        const parsed: unknown = JSON.parse(raw);
-        const jobData = parseJsonPipeline(parsed);
+        const jobData = parsePipelineFile(filePath);
 
         await generateAndSave(context, sidebar, jobData, filePath, progress);
       } catch (err) {
@@ -215,16 +215,11 @@ async function generateAndSave(
   progress.report({
     message: `Generating documentation via ${config.provider}...`,
   });
-  const markdown = await generateDocumentation(jobData, config);
-
-  // Prepend a deterministic Mermaid architecture diagram
-  const diagram = generateMermaidDiagram(jobData);
-  const pipelineName =
-    jobData.job.name ??
-    path.basename(sourceFilePath, path.extname(sourceFilePath));
-  const fullMarkdown = diagram
-    ? `# ${pipelineName}\n\n## Architecture Overview\n\n${diagram}\n\n---\n\n${markdown}`
-    : markdown;
+  const { pipelineName, markdown: fullMarkdown } = await renderPipelineMarkdown(
+    jobData,
+    config,
+    sourceFilePath,
+  );
 
   // Build a timestamped filename so previous docs are never overwritten.
   // Format: {sourceBaseName}_doc_YYYY-MM-DD_HH-mm-ss.md
@@ -275,16 +270,12 @@ async function getAiConfig(
       (await context.secrets.get("pipelineDoc.openaiApiKey")) ?? undefined,
     anthropicApiKey:
       (await context.secrets.get("pipelineDoc.anthropicApiKey")) ?? undefined,
+    openaiModel: cfg.get<string>("openaiModel") || undefined,
+    anthropicModel: cfg.get<string>("anthropicModel") || undefined,
     outputLanguage: cfg.get<string>("outputLanguage") ?? "english",
     // Fas 3: hämtas från licens-flödet, hardcodat tillsvidare
     premiumApiUrl: "https://your-app.vercel.app/api/generate",
   };
-}
-
-function hasApiKey(config: AiConfig): boolean {
-  if (config.provider === "openai") return Boolean(config.openaiApiKey);
-  if (config.provider === "anthropic") return Boolean(config.anthropicApiKey);
-  return true;
 }
 
 async function resolveFilePath(
@@ -306,58 +297,125 @@ async function resolveFilePath(
 }
 
 // ---------------------------------------------------------------------------
-// JSON pipeline format detection & routing
+// Kommando: Batch Generation (högerklick på katalog) — Premium-funktion
 // ---------------------------------------------------------------------------
 
-function detectPipelineFormat(
-  json: unknown,
-): "adf" | "fabric" | "talend-json" | "unknown" {
-  if (!json || typeof json !== "object") return "unknown";
-  const obj = json as Record<string, unknown>;
+const LARGE_BATCH_WARNING_THRESHOLD = 10;
 
-  // ADF standalone: { name, properties: { activities: [...] } }
-  // Fabric: identical structure
-  const props = obj["properties"] as Record<string, unknown> | undefined;
-  if (props && Array.isArray(props["activities"])) {
-    // Fabric pipelines often have annotations referencing Fabric, but the
-    // structure is identical — we rely on file origin or a "fabric" hint in
-    // the schema field if present.
-    const schema = (obj["\$schema"] as string | undefined) ?? "";
-    return schema.toLowerCase().includes("fabric") ? "fabric" : "adf";
-  }
-
-  // ARM template: { resources: [ { type: ".../pipelines" } ] }
-  if (Array.isArray(obj["resources"])) {
-    const hasPipeline = (
-      obj["resources"] as Array<Record<string, unknown>>
-    ).some(
-      (r) =>
-        typeof r["type"] === "string" &&
-        r["type"].toLowerCase().endsWith("/pipelines"),
-    );
-    if (hasPipeline) return "adf";
-  }
-
-  // Talend JSON export from parser.py: { job: {...}, components: [...] }
-  if (obj["job"] && Array.isArray(obj["components"])) return "talend-json";
-
-  return "unknown";
+function isPremiumTier(): boolean {
+  const cfg = vscode.workspace.getConfiguration("pipelineDoc");
+  // TODO: ersätt med riktig licensvalidering. Lokal flagga tillsvidare —
+  // Premium-funktioner kräver fortfarande användarens egen API-nyckel,
+  // det finns ingen AI-proxybackend att validera mot.
+  return (cfg.get<string>("tier") ?? "free") === "premium";
 }
 
-function parseJsonPipeline(json: unknown): PipelineDocument {
-  const format = detectPipelineFormat(json);
-
-  switch (format) {
-    case "adf":
-    case "fabric":
-      return parseAdfPipeline(json, format);
-    case "talend-json":
-      return json as PipelineDocument;
-    default:
-      throw new Error(
-        "Unrecognised JSON format. Expected an ADF/Fabric pipeline JSON or a Talend JSON export.",
+async function handleGenerateBatch(
+  context: vscode.ExtensionContext,
+  sidebar: PipelineDocSidebarProvider,
+  uri?: vscode.Uri,
+): Promise<void> {
+  if (!isPremiumTier()) {
+    const choice = await vscode.window.showWarningMessage(
+      "Batch Generation is a Premium feature. Set 'pipelineDoc.tier' to \"premium\" in Settings to enable it.",
+      "Open Settings",
+    );
+    if (choice === "Open Settings") {
+      await vscode.commands.executeCommand(
+        "workbench.action.openSettings",
+        "pipelineDoc.tier",
       );
+    }
+    return;
   }
+
+  let folderPath = uri?.fsPath;
+  if (!folderPath) {
+    const result = await vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: "Select folder",
+      title: "Select a folder containing pipeline files",
+    });
+    folderPath = result?.[0]?.fsPath;
+  }
+  if (!folderPath) return;
+
+  const files = discoverPipelineFiles(folderPath);
+  if (files.length === 0) {
+    vscode.window.showInformationMessage(
+      "PipelineDoc: No .item or .json pipeline files found in this folder.",
+    );
+    return;
+  }
+
+  const config = await getAiConfig(context);
+  if (config.provider !== "premium" && !hasApiKey(config)) {
+    const key = await promptForApiKey(
+      context,
+      config.provider as "openai" | "anthropic",
+    );
+    if (!key) return;
+    if (config.provider === "openai") config.openaiApiKey = key;
+    else config.anthropicApiKey = key;
+  }
+
+  if (files.length > LARGE_BATCH_WARNING_THRESHOLD) {
+    const confirm = await vscode.window.showWarningMessage(
+      `This will generate documentation for ${files.length} pipelines using your ${config.provider} API key. ` +
+        "Depending on your account's rate limits this may take several minutes and will incur API usage costs. Continue?",
+      { modal: true },
+      "Continue",
+    );
+    if (confirm !== "Continue") return;
+  }
+
+  const cfg = vscode.workspace.getConfiguration("pipelineDoc");
+  const concurrency = cfg.get<number>("batchConcurrency") ?? 5;
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: "PipelineDoc: Batch Generation",
+      cancellable: true,
+    },
+    async (progress, token) => {
+      const summary = await runBatchGeneration({
+        folderPath: folderPath!,
+        files,
+        config,
+        concurrency,
+        progress,
+        token,
+      });
+
+      if (token.isCancellationRequested) {
+        vscode.window.showInformationMessage(
+          `PipelineDoc: Batch cancelled after ${summary.succeeded.length + summary.failed.length}/${files.length} pipelines.`,
+        );
+        return;
+      }
+
+      await vscode.commands.executeCommand(
+        "markdown.showPreview",
+        vscode.Uri.file(summary.readmePath),
+      );
+
+      await sidebar.addRecentDoc({
+        label: `${path.basename(folderPath!)} (batch — ${summary.succeeded.length}/${files.length})`,
+        filePath: summary.readmePath,
+        timestamp: new Date().toISOString(),
+      });
+
+      const failedCount = summary.failed.length;
+      vscode.window.showInformationMessage(
+        failedCount === 0
+          ? `PipelineDoc: Batch complete — ${summary.succeeded.length}/${files.length} pipelines documented.`
+          : `PipelineDoc: Batch complete — ${summary.succeeded.length}/${files.length} succeeded, ${failedCount} failed. See README for details.`,
+      );
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------

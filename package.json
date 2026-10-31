@@ -46,6 +46,10 @@
         "title": "PipelineDoc: Generate Documentation from ADF / Fabric / Talend JSON"
       },
       {
+        "command": "pipeline-doc.generateBatch",
+        "title": "PipelineDoc: Generate Documentation for Folder (Batch)"
+      },
+      {
         "command": "pipeline-doc.setOpenAIKey",
         "title": "PipelineDoc: Set OpenAI API Key"
       },
@@ -105,6 +109,42 @@
           ],
           "default": "english",
           "description": "Language for generated documentation"
+        },
+        "pipelineDoc.openaiModel": {
+          "type": "string",
+          "default": "gpt-4o-mini",
+          "examples": [
+            "gpt-4o-mini",
+            "gpt-4o",
+            "gpt-4.1-mini"
+          ],
+          "description": "Which OpenAI model to use for documentation generation. Any valid OpenAI model ID is accepted, not just the suggestions."
+        },
+        "pipelineDoc.anthropicModel": {
+          "type": "string",
+          "default": "claude-sonnet-4-6",
+          "examples": [
+            "claude-sonnet-4-6",
+            "claude-opus-4-1",
+            "claude-haiku-4-5"
+          ],
+          "description": "Which Anthropic model to use for documentation generation. Any valid Anthropic model ID is accepted, not just the suggestions."
+        },
+        "pipelineDoc.batchConcurrency": {
+          "type": "integer",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Max number of pipelines to document in parallel during Batch Generation. Lower this if you hit API rate-limit (429) errors."
+        },
+        "pipelineDoc.tier": {
+          "type": "string",
+          "enum": [
+            "free",
+            "premium"
+          ],
+          "default": "free",
+          "description": "(Temporary) Local flag to unlock Premium features such as Batch Generation for testing. Will be replaced by real license validation before release."
         }
       }
     },
@@ -125,6 +165,11 @@
         {
           "command": "pipeline-doc.generateFromJson",
           "when": "resourceExtname == .json",
+          "group": "navigation"
+        },
+        {
+          "command": "pipeline-doc.generateBatch",
+          "when": "explorerResourceIsFolder",
           "group": "navigation"
         }
       ]

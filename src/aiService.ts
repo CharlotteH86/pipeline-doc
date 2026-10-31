@@ -22,9 +22,39 @@ export interface AiConfig {
   provider: AiProvider;
   openaiApiKey?: string;
   anthropicApiKey?: string;
+  openaiModel?: string;
+  anthropicModel?: string;
   premiumApiUrl?: string;
   premiumLicenseKey?: string;
   outputLanguage?: string;
+}
+
+export const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
+export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
+
+/**
+ * Kastas när AI-leverantören svarar med HTTP 429 (rate limit).
+ * Används av Batch Generation för att sakta ner/minska samtidigheten
+ * istället för att behandla anropet som ett permanent fel.
+ */
+export class RateLimitError extends Error {
+  constructor(
+    message: string,
+    public readonly retryAfterMs: number | undefined,
+  ) {
+    super(message);
+    this.name = "RateLimitError";
+  }
+}
+
+/** Läser ut en eventuell `Retry-After`-header (sekunder eller HTTP-datum). */
+function parseRetryAfterMs(response: Response): number | undefined {
+  const header = response.headers.get("retry-after");
+  if (!header) return undefined;
+  const seconds = Number(header);
+  if (!Number.isNaN(seconds)) return seconds * 1000;
+  const date = Date.parse(header);
+  return Number.isNaN(date) ? undefined : Math.max(0, date - Date.now());
 }
 
 // ---------------------------------------------------------------------------
@@ -120,7 +150,7 @@ async function callOpenAI(
       Authorization: `Bearer ${config.openaiApiKey}`,
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: config.openaiModel || DEFAULT_OPENAI_MODEL,
       messages: [
         {
           role: "system",
@@ -131,6 +161,12 @@ async function callOpenAI(
     }),
   });
 
+  if (response.status === 429) {
+    throw new RateLimitError(
+      "OpenAI rate limit (429) nådd.",
+      parseRetryAfterMs(response),
+    );
+  }
   if (!response.ok) {
     const err = await response.text();
     throw new Error(`OpenAI-anrop misslyckades (${response.status}): ${err}`);
@@ -166,13 +202,19 @@ async function callAnthropic(
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-6",
+      model: config.anthropicModel || DEFAULT_ANTHROPIC_MODEL,
       max_tokens: 4096,
       system: buildSystemPrompt(language, jobData.pipeline_type),
       messages: [{ role: "user", content: buildUserPrompt(jobData, language) }],
     }),
   });
 
+  if (response.status === 429) {
+    throw new RateLimitError(
+      "Anthropic rate limit (429) nådd.",
+      parseRetryAfterMs(response),
+    );
+  }
   if (!response.ok) {
     const err = await response.text();
     throw new Error(
@@ -208,6 +250,12 @@ async function callPremiumBackend(
     body: JSON.stringify({ jobData }),
   });
 
+  if (response.status === 429) {
+    throw new RateLimitError(
+      "Premium-backend rate limit (429) nådd.",
+      parseRetryAfterMs(response),
+    );
+  }
   if (!response.ok) {
     const err = await response.text();
     throw new Error(
